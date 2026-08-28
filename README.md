@@ -1,13 +1,11 @@
 # 暗黑玄幻内容银行
 
-这是第一阶段的 GitHub Pages 静态原型，可直接部署，无需域名或服务器。
+这是第二阶段私有云端版，支持账号登录、跨电脑同步，以及灵感素材的新增、编辑、删除、搜索和筛选。
 
 ## 发布
 
-1. 将本文件夹内的 `index.html`、`.nojekyll` 和 `README.md` 上传到仓库根目录。
-2. 打开仓库的 **Settings → Pages**。
-3. 在 **Build and deployment** 中选择 **Deploy from a branch**。
-4. Branch 选择 **main**，目录选择 **/(root)**，点击 **Save**。
-5. 等待约 1—3 分钟，GitHub Pages 会显示访问地址。
+1. 在 Supabase 项目的 SQL Editor 中运行 `supabase-schema.sql`。
+2. 将本文件夹全部文件上传到 GitHub 仓库根目录并覆盖旧版。
+3. 等待 GitHub Pages 自动更新。
 
-当前版本是可交互界面原型，搜索、筛选和导航可用；真实素材保存、自动分析和流水线执行将在下一阶段接入。
+安全说明：配置文件只包含浏览器可公开使用的 publishable key；数据库启用了行级安全，每个账号只能访问自己的素材。切勿上传数据库密码、Secret key 或 service_role key。
