@@ -20,3 +20,28 @@ create table if not exists public.story_projects(id uuid primary key default gen
 create table if not exists public.chapter_cards(id uuid primary key default gen_random_uuid(),user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,project_id uuid not null references public.story_projects(id) on delete cascade,chapter_no integer not null check(chapter_no>0),title text not null,objective text not null default '',opening_hook text not null default '',beat_qi text not null default '',beat_cheng text not null default '',beat_zhuan text not null default '',beat_he text not null default '',ending_hook text not null default '',emotion_curve text not null default '',continuity_notes text not null default '',created_at timestamptz not null default now(),updated_at timestamptz not null default now(),unique(project_id,chapter_no));alter table public.chapter_cards enable row level security;drop policy if exists chapter_owner_all on public.chapter_cards;create policy chapter_owner_all on public.chapter_cards for all using(auth.uid()=user_id) with check(auth.uid()=user_id and exists(select 1 from public.story_projects p where p.id=project_id and p.user_id=auth.uid()));drop trigger if exists chapters_set_updated_at on public.chapter_cards;create trigger chapters_set_updated_at before update on public.chapter_cards for each row execute function public.set_updated_at();
 
 create table if not exists public.sop_templates(id uuid primary key default gen_random_uuid(),user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,name text not null check(char_length(name) between 1 and 200),category text not null default '创作方法',purpose text not null default '',inputs text not null default '',steps text not null default '',outputs text not null default '',checklist text not null default '',status text not null default '草稿',created_at timestamptz not null default now(),updated_at timestamptz not null default now());alter table public.sop_templates enable row level security;drop policy if exists template_owner_all on public.sop_templates;create policy template_owner_all on public.sop_templates for all using(auth.uid()=user_id) with check(auth.uid()=user_id);drop trigger if exists templates_set_updated_at on public.sop_templates;create trigger templates_set_updated_at before update on public.sop_templates for each row execute function public.set_updated_at();
+
+create table if not exists public.pipeline_runs(
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  name text not null check(char_length(name) between 1 and 200),
+  pipeline_type text not null check(pipeline_type in('市场风向扫描','素材自动加工','故事开发','连续性质检')),
+  project_id uuid references public.story_projects(id) on delete set null,
+  sop_id uuid references public.sop_templates(id) on delete set null,
+  input_brief text not null default '',
+  output_draft text not null default '',
+  review_notes text not null default '',
+  status text not null default '待执行' check(status in('待执行','执行中','待审核','已完成','失败')),
+  steps jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+alter table public.pipeline_runs enable row level security;
+drop policy if exists pipeline_owner_all on public.pipeline_runs;
+create policy pipeline_owner_all on public.pipeline_runs for all using(auth.uid()=user_id) with check(
+  auth.uid()=user_id
+  and (project_id is null or exists(select 1 from public.story_projects p where p.id=project_id and p.user_id=auth.uid()))
+  and (sop_id is null or exists(select 1 from public.sop_templates s where s.id=sop_id and s.user_id=auth.uid()))
+);
+drop trigger if exists pipeline_runs_set_updated_at on public.pipeline_runs;
+create trigger pipeline_runs_set_updated_at before update on public.pipeline_runs for each row execute function public.set_updated_at();
