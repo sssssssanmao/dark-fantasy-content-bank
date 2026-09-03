@@ -45,3 +45,25 @@ create policy pipeline_owner_all on public.pipeline_runs for all using(auth.uid(
 );
 drop trigger if exists pipeline_runs_set_updated_at on public.pipeline_runs;
 create trigger pipeline_runs_set_updated_at before update on public.pipeline_runs for each row execute function public.set_updated_at();
+
+alter table public.assets add column if not exists source_pipeline_id uuid references public.pipeline_runs(id) on delete set null;
+alter table public.chapter_cards add column if not exists source_pipeline_id uuid references public.pipeline_runs(id) on delete set null;
+alter table public.sop_templates add column if not exists source_pipeline_id uuid references public.pipeline_runs(id) on delete set null;
+
+create table if not exists public.pipeline_conversions(
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  pipeline_id uuid not null references public.pipeline_runs(id) on delete cascade,
+  target_type text not null check(target_type in('资产卡','章节卡','SOP')),
+  target_id uuid not null,
+  target_title text not null default '',
+  created_at timestamptz not null default now()
+);
+alter table public.pipeline_conversions enable row level security;
+drop policy if exists conversion_owner_all on public.pipeline_conversions;
+create policy conversion_owner_all on public.pipeline_conversions for all using(
+  auth.uid()=user_id and exists(select 1 from public.pipeline_runs p where p.id=pipeline_id and p.user_id=auth.uid())
+) with check(
+  auth.uid()=user_id and exists(select 1 from public.pipeline_runs p where p.id=pipeline_id and p.user_id=auth.uid())
+);
+create index if not exists pipeline_conversions_pipeline_idx on public.pipeline_conversions(pipeline_id);
