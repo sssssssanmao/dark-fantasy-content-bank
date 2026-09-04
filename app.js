@@ -113,3 +113,55 @@ loadAll=async function(){
   const {error}=await db.auth.refreshSession();
   if(!error)await loadAllWithRecovery();
 };
+
+// v11：让总览统计、素材行和流水线说明具备清晰的点击行为。
+document.head.insertAdjacentHTML('beforeend',`<style>
+.metrics .card,.pipeline,.row{transition:border-color .18s ease,background .18s ease,transform .18s ease}
+.metrics .card[data-clickable],.pipeline[data-clickable],.row[data-clickable]{cursor:pointer}
+.metrics .card[data-clickable]:hover,.pipeline[data-clickable]:hover,.row[data-clickable]:hover{border-color:#6c50c7;background:#181a24}
+.metrics .card[data-clickable]:active,.pipeline[data-clickable]:active,.row[data-clickable]:active{transform:translateY(1px)}
+.click-hint{display:block;margin-top:5px;color:#7c83a0;font-size:10px}
+</style>`);
+
+function bindOverviewInteractions(){
+  const metricTargets=['assets','ideas','ideas','assets'];
+  document.querySelectorAll('.metrics .card').forEach((card,index)=>{
+    card.dataset.clickable='true';
+    card.tabIndex=0;
+    card.setAttribute('role','button');
+    card.setAttribute('aria-label',`打开${card.querySelector('span')?.textContent||'对应资料库'}`);
+    if(!card.querySelector('.click-hint'))card.insertAdjacentHTML('beforeend','<small class="click-hint">点击查看 →</small>');
+    const go=()=>switchView(metricTargets[index]||'ideas');
+    card.onclick=go;
+    card.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}};
+  });
+  document.querySelectorAll('.pipeline').forEach(block=>{
+    block.dataset.clickable='true';
+    block.tabIndex=0;
+    block.setAttribute('role','button');
+    block.setAttribute('aria-label',`打开自动化流水线：${block.querySelector('b')?.textContent||''}`);
+    const go=()=>switchView('pipelines');
+    block.onclick=go;
+    block.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}};
+  });
+  if(currentView==='ideas')document.querySelectorAll('#list .row').forEach(row=>{
+    row.dataset.clickable='true';
+    row.tabIndex=0;
+    row.setAttribute('role','button');
+    const title=row.querySelector('strong')?.textContent||'';
+    const action=row.querySelector('button[onclick*="processIdea"]')?.getAttribute('onclick')||'';
+    const itemId=action.match(/'([^']+)'/)?.[1];
+    row.setAttribute('aria-label',`编辑灵感：${title}`);
+    const go=e=>{
+      if(e?.target?.closest?.('button,input,select,textarea,a'))return;
+      const item=ideas.find(x=>x.id===itemId);
+      if(item)openIdea(item);
+    };
+    row.onclick=go;
+    row.onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&!e.target.closest('button')){e.preventDefault();go(e)}};
+  });
+}
+
+const v11RenderCurrent=renderCurrent;
+renderCurrent=function(){v11RenderCurrent();bindOverviewInteractions()};
+bindOverviewInteractions();
