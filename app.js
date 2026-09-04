@@ -116,10 +116,10 @@ loadAll=async function(){
 
 // v11：让总览统计、素材行和流水线说明具备清晰的点击行为。
 document.head.insertAdjacentHTML('beforeend',`<style>
-.metrics .card,.pipeline,.row{transition:border-color .18s ease,background .18s ease,transform .18s ease}
-.metrics .card[data-clickable],.pipeline[data-clickable],.row[data-clickable]{cursor:pointer}
-.metrics .card[data-clickable]:hover,.pipeline[data-clickable]:hover,.row[data-clickable]:hover{border-color:#6c50c7;background:#181a24}
-.metrics .card[data-clickable]:active,.pipeline[data-clickable]:active,.row[data-clickable]:active{transform:translateY(1px)}
+.metrics .card,.pipeline,.row,.person-card,.story-card,.chapter-card,.template-card,.run-card{transition:border-color .18s ease,background .18s ease,transform .18s ease}
+[data-clickable="true"]{cursor:pointer}
+[data-clickable="true"]:hover{border-color:#6c50c7!important;background:#181a24!important}
+[data-clickable="true"]:active{transform:translateY(1px)}
 .click-hint{display:block;margin-top:5px;color:#7c83a0;font-size:10px}
 </style>`);
 
@@ -160,6 +160,31 @@ function bindOverviewInteractions(){
     row.onclick=go;
     row.onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&!e.target.closest('button')){e.preventDefault();go(e)}};
   });
+
+  const bindCards=(selector,actionSelector,action,label)=>{
+    document.querySelectorAll(selector).forEach(card=>{
+      const actionCode=card.querySelector(actionSelector)?.getAttribute('onclick')||'';
+      const id=actionCode.match(/'([^']+)'/)?.[1];
+      if(!id)return;
+      card.dataset.clickable='true';
+      card.tabIndex=0;
+      card.setAttribute('role','button');
+      card.setAttribute('aria-label',label);
+      const go=e=>{
+        if(e?.target?.closest?.('button,input,select,textarea,a'))return;
+        action(id);
+      };
+      card.onclick=go;
+      card.onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&!e.target.closest('button')){e.preventDefault();go(e)}};
+    });
+  };
+
+  bindCards('#assetList .row','button[onclick*="editAsset"]',id=>editAsset(id),'打开半成品资产');
+  bindCards('#peopleList .person-card','button[onclick*="editCharacter"]',id=>editCharacter(id),'打开人物卡');
+  bindCards('#projectList .story-card','button[onclick*="selectProject"]',id=>{selectProject(id);bindOverviewInteractions()},'打开故事项目的章节卡');
+  bindCards('#chapterList .chapter-card','button[onclick*="editChapter"]',id=>editChapter(id),'打开章节卡');
+  bindCards('#templateList .template-card','button[onclick*="editTemplate"]',id=>editTemplate(id),'打开模板与 SOP');
+  bindCards('#pipelineList .run-card','button[onclick*="editPipeline"]',id=>editPipeline(id),'打开自动化流水线任务');
 }
 
 const v11RenderCurrent=renderCurrent;
