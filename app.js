@@ -185,6 +185,30 @@ function bindOverviewInteractions(){
   bindCards('#chapterList .chapter-card','button[onclick*="editChapter"]',id=>editChapter(id),'打开章节卡');
   bindCards('#templateList .template-card','button[onclick*="editTemplate"]',id=>editTemplate(id),'打开模板与 SOP');
   bindCards('#pipelineList .run-card','button[onclick*="editPipeline"]',id=>editPipeline(id),'打开自动化流水线任务');
+
+  const healthTargets=['assets','relations','projects','templates','pipelines'];
+  document.querySelectorAll('#healthChecks .health-check').forEach((check,index)=>{
+    check.dataset.clickable='true';
+    check.tabIndex=0;
+    check.setAttribute('role','button');
+    check.setAttribute('aria-label',`前往处理：${check.textContent.trim()}`);
+    const go=()=>switchView(healthTargets[index]||'dashboard');
+    check.onclick=go;
+    check.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}};
+  });
+
+  const recent=typeof recentItems==='function'?recentItems():[];
+  document.querySelectorAll('#recentList .recent-row').forEach((row,index)=>{
+    const item=recent[index];
+    if(!item?.view)return;
+    row.dataset.clickable='true';
+    row.tabIndex=0;
+    row.setAttribute('role','button');
+    row.setAttribute('aria-label',`打开最近产出：${item.title}`);
+    const go=()=>switchView(item.view);
+    row.onclick=go;
+    row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}};
+  });
 }
 
 const v11RenderCurrent=renderCurrent;
