@@ -214,3 +214,44 @@ function bindOverviewInteractions(){
 const v11RenderCurrent=renderCurrent;
 renderCurrent=function(){v11RenderCurrent();bindOverviewInteractions()};
 bindOverviewInteractions();
+
+// v14：通过 Supabase Edge Function 安全调用 DeepSeek，密钥只保存在服务端。
+document.head.insertAdjacentHTML('beforeend',`<style>
+.ai-run{background:linear-gradient(90deg,#6d28d9,#0891b2)!important;color:#fff!important;font-weight:700}
+.ai-run:disabled{cursor:wait;opacity:.55}
+.ai-note{margin-top:8px;color:#67e8f9;font-size:11px}
+</style>`);
+
+window.executePipelineAI=async id=>{
+  const task=pipelines.find(x=>x.id===id);
+  if(!task)return;
+  if(!confirm(`将调用 DeepSeek API 自动执行《${task.name}》，可能产生少量 API 费用。确定继续吗？`))return;
+  const button=[...document.querySelectorAll('.ai-run')].find(x=>x.dataset.id===id);
+  if(button){button.disabled=true;button.textContent='AI 执行中…'}
+  const {error:stateError}=await db.from('pipeline_runs').update({status:'执行中',last_error:''}).eq('id',id);
+  if(stateError){alert('任务状态更新失败：'+stateError.message);if(button){button.disabled=false;button.textContent='AI 自动执行'}return}
+  const {data,error}=await db.functions.invoke('execute-pipeline',{body:{pipeline_id:id}});
+  if(error){alert('AI 执行失败：'+error.message+'\n请检查 Edge Function 和 DEEPSEEK_API_KEY。');await loadAll();return}
+  if(!data?.ok){alert('AI 执行失败：'+(data?.error||'未知错误'));await loadAll();return}
+  alert('AI 已完成任务，结果已自动写回“执行结果”，请打开任务审核。');
+  await loadAll();
+};
+
+const v14RenderPipelines=renderPipelines;
+renderPipelines=function(){
+  v14RenderPipelines();
+  pipelines.forEach(task=>{
+    const card=[...document.querySelectorAll('.run-card')].find(c=>c.querySelector(`button[onclick="editPipeline('${task.id}')"]`));
+    if(!card)return;
+    const actions=card.querySelector('.run-actions');
+    if(!actions||actions.querySelector('.ai-run'))return;
+    const button=document.createElement('button');
+    button.className='ai-run';button.dataset.id=task.id;
+    button.textContent=task.status==='执行中'?'AI 执行中…':'AI 自动执行';
+    button.disabled=task.status==='执行中';
+    button.onclick=e=>{e.stopPropagation();executePipelineAI(task.id)};
+    actions.insertBefore(button,actions.firstChild);
+    if(task.last_error){const note=document.createElement('div');note.className='ai-note';note.textContent='上次错误：'+task.last_error;card.appendChild(note)}
+  });
+  bindOverviewInteractions();
+};
