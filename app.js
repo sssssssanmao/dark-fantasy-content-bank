@@ -344,3 +344,30 @@ window.createModuleExtraction=async sourceId=>{
 
 const v16RenderPipelines=renderPipelines;
 renderPipelines=function(){v16RenderPipelines();pipelines.forEach(task=>{const edit=document.querySelector(`#pipelineList button[onclick="editPipeline('${task.id}')"]`);if(!edit)return;const card=edit.closest('.run-card'),actions=edit.parentElement;if(task.output_draft?.trim()){const q=document.createElement('div');q.className=task.output_complete?'quality-ok':'quality-warn';q.textContent=task.output_complete?'✓ 自动完整性检查通过':'⚠ 未检测到完整结束标记，结果可能被截断';card.appendChild(q)}if(task.pipeline_type==='作品样本拆解'&&task.status==='已完成'&&!actions.querySelector('.derive-modules')){const b=document.createElement('button');b.className='derive-modules';b.textContent='生成模块提炼任务';b.onclick=e=>{e.stopPropagation();createModuleExtraction(task.id)};actions.insertBefore(b,edit)}});bindOverviewInteractions()};
+
+// v17：把模块提炼报告解析成独立资产卡，一次审核、分别入库。
+['关系模块','意象模块'].forEach(type=>{
+  if(!$('assetType').querySelector(`option[value="${type}"]`))$('assetType').insertAdjacentHTML('beforeend',`<option>${type}</option>`);
+  if(!$('conversionAssetType').querySelector(`option[value="${type}"]`))$('conversionAssetType').insertAdjacentHTML('beforeend',`<option>${type}</option>`);
+});
+const v17AssetsMarkup=assetsMarkup;
+assetsMarkup=function(){return v17AssetsMarkup().replace('<button class="chip">场景卡</button>','<button class="chip">场景卡</button><button class="chip">节奏模块</button><button class="chip">情绪模块</button><button class="chip">信息释放模块</button><button class="chip">世界观模块</button><button class="chip">关系模块</button><button class="chip">意象模块</button>')};
+
+function moduleField(text,label){const escaped=label.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),m=text.match(new RegExp(`^\\|\\s*\\*\\*${escaped}\\*\\*\\s*\\|\\s*([\\s\\S]*?)\\|\\s*$`,'m'));return m?.[1]?.trim()||''}
+function moduleAssetType(raw){if(raw.includes('人物关系'))return '关系模块';if(raw.includes('意象'))return '意象模块';if(raw.includes('信息释放'))return '信息释放模块';if(raw.includes('情绪'))return '情绪模块';if(raw.includes('世界观'))return '世界观模块';if(raw.includes('叙事结构')||raw.includes('因果')||raw.includes('节奏'))return '节奏模块';return '情节卡'}
+function parseModuleCards(text){const re=/^###\s+M-\d+\s*[｜|]\s*([^\n]+)$/gm,matches=[...text.matchAll(re)];return matches.map((m,i)=>{const block=text.slice(m.index,i+1<matches.length?matches[i+1].index:text.length).trim(),rawType=moduleField(block,'模块类型'),title=moduleField(block,'资产名称')||m[1].trim(),summary=moduleField(block,'核心机制'),tagText=moduleField(block,'建议标签');return{asset_type:moduleAssetType(rawType),title:title.slice(0,200),tags:tagText.split(/[#＃,，\s]+/).map(x=>x.trim()).filter(Boolean),summary:summary.slice(0,500),content:block,status:'待确认'}}).filter(x=>x.title&&x.summary)}
+
+window.batchImportModules=async id=>{
+  const task=pipelines.find(x=>x.id===id);if(!task)return;
+  if(task.status!=='已完成'||!task.output_complete){alert('请先确保完整性检查通过，并点击“审核通过”。');return}
+  if(assets.some(a=>a.source_pipeline_id===id)){alert('这个任务已经拆分入库，请到半成品资产库查看。');return}
+  const cards=parseModuleCards(task.output_draft).map(x=>({...x,source_pipeline_id:id}));
+  if(!cards.length){alert('没有识别到标准模块卡。请确认标题格式为“### M-1｜模块名称”。');return}
+  if(!confirm(`将拆分生成 ${cards.length} 张独立模块资产，状态均为“待确认”。确定继续吗？`))return;
+  const {data,error}=await db.from('assets').insert(cards).select('id,title');if(error){alert('批量入库失败：'+error.message);return}
+  const logs=(data||[]).map(x=>({pipeline_id:id,target_type:'资产卡',target_id:x.id,target_title:x.title}));if(logs.length){const lr=await db.from('pipeline_conversions').insert(logs);if(lr.error){alert('资产已入库，但来源日志写入失败：'+lr.error.message);await loadAll();return}}
+  alert(`已成功生成 ${cards.length} 张独立模块资产。请到“半成品资产库”逐张确认。`);loadAll();
+};
+
+const v17RenderPipelines=renderPipelines;
+renderPipelines=function(){v17RenderPipelines();pipelines.forEach(task=>{if(task.pipeline_type!=='模块提炼与入库'||task.status!=='已完成'||!task.output_complete)return;const edit=document.querySelector(`#pipelineList button[onclick="editPipeline('${task.id}')"]`);if(!edit)return;const actions=edit.parentElement;if(actions.querySelector('.batch-import'))return;const b=document.createElement('button');b.className='batch-import derive-modules';b.textContent=assets.some(a=>a.source_pipeline_id===task.id)?'模块已分别入库':'批量拆分入库';b.disabled=assets.some(a=>a.source_pipeline_id===task.id);b.onclick=e=>{e.stopPropagation();batchImportModules(task.id)};actions.insertBefore(b,edit)});bindOverviewInteractions()};
