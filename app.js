@@ -255,3 +255,63 @@ renderPipelines=function(){
   });
   bindOverviewInteractions();
 };
+
+// v15：样本拆解、按审核意见重做、人物资产同步到人物库。
+document.head.insertAdjacentHTML('beforeend',`<style>
+.revise-run{background:#7c3aed!important;color:#fff!important;font-weight:700}.sync-character{color:#67e8f9!important}
+.v15-tip{padding:10px 12px;margin:8px 0 12px;border-left:3px solid #22d3ee;background:#0f172a;color:#cbd5e1;font-size:12px;line-height:1.65}
+</style>`);
+
+if(!$('pipelineType').querySelector('option[value="作品样本拆解"]'))$('pipelineType').insertAdjacentHTML('beforeend','<option>作品样本拆解</option><option>创作引擎组装</option>');
+['节奏模块','情绪模块','信息释放模块','世界观模块'].forEach(type=>{
+  if(!$('assetType').querySelector(`option[value="${type}"]`))$('assetType').insertAdjacentHTML('beforeend',`<option>${type}</option>`);
+  if(!$('conversionAssetType').querySelector(`option[value="${type}"]`))$('conversionAssetType').insertAdjacentHTML('beforeend',`<option>${type}</option>`);
+});
+pipelineSteps['作品样本拆解']=['校验样本文本与章节边界','拆解信息释放','拆解情绪节律','拆解世界观揭示','提炼可复用模块','人工确认入库'];
+pipelineSteps['创作引擎组装']=['读取已确认模块','筛选可复用机制','建立原创世界观','组装叙事与节奏引擎','原创性与连续性质检','人工确认方案'];
+
+const v15PipelineMarkup=pipelineMarkup;
+pipelineMarkup=function(){return v15PipelineMarkup().replace('<button class="chip">连续性质检</button>','<button class="chip">连续性质检</button><button class="chip">作品样本拆解</button><button class="chip">创作引擎组装</button>')};
+
+const sampleTemplate=`任务目标：拆解用户合法持有并粘贴的小说样本文本，不生成正文。\n\n作品名称：\n样本范围：第1章—第5章\n章节文本：\n【第1章】\n（粘贴正文）\n\n【第2章】\n（粘贴正文）\n\n输出：信息释放清单、情绪节律表、世界观揭示表、可复用模块。所有结论标注“文本已证实/合理推测/待确认”，引用仅保留必要短句和章节段落位置。`;
+$('pipelineType').addEventListener('change',()=>{
+  if($('pipelineType').value==='作品样本拆解'&&!$('pipelineInput').value.trim())$('pipelineInput').value=sampleTemplate;
+  if($('pipelineType').value==='创作引擎组装'&&!$('pipelineInput').value.trim())$('pipelineInput').value=`创作目标：基于库内已确认模块，组装一套原创世界观与开篇节奏方案。\n\n目标题材：\n目标读者：\n核心情绪：\n希望调用的模块/标签：\n必须保留的原创种子：\n必须避开的元素：\n预计篇幅：\n\n只输出设定蓝图、叙事引擎和前5章节奏表，不生成小说正文。所有新设定先标记为“候选设定/待确认”。`;
+});
+
+window.revisePipelineAI=async id=>{
+  const task=pipelines.find(x=>x.id===id);if(!task)return;
+  if(!task.output_draft?.trim()){alert('当前没有原执行结果，不能重做。');return}
+  if(!task.review_notes?.trim()){alert('请先点击“编辑”，在第三个文本框填写人工审核意见并保存。');return}
+  if(!confirm(`AI 将依据人工审核意见重做《${task.name}》，会覆盖当前执行结果。确定继续吗？`))return;
+  await db.from('pipeline_runs').update({status:'执行中',last_error:''}).eq('id',id);
+  const {data,error}=await db.functions.invoke('execute-pipeline',{body:{pipeline_id:id,mode:'revise'}});
+  if(error||!data?.ok){alert('AI 重做失败：'+(data?.error||error?.message||'未知错误'));await loadAll();return}
+  alert('AI 已按审核意见生成完整新版结果，请重新打开任务审核。');await loadAll();
+};
+
+document.body.insertAdjacentHTML('beforeend',`<div class="modal-wrap" id="syncCharacterModal"><form class="modal" id="syncCharacterForm"><div class="modal-head"><h2>同步到人物库</h2><button type="button" class="close" id="syncCharacterClose">×</button></div><div class="v15-tip">系统已从人物资产中预填字段。请人工核对后保存；原人物资产仍会保留。</div><input class="field" id="syncCharacterName" required placeholder="人物姓名"><input class="field" id="syncCharacterRole" placeholder="身份与角色定位"><input class="field" id="syncCharacterTags" placeholder="标签，用逗号分隔"><textarea class="field" id="syncCharacterDesire" placeholder="核心欲望与外在目标"></textarea><textarea class="field" id="syncCharacterFear" placeholder="核心恐惧与致命缺陷"></textarea><textarea class="field" id="syncCharacterAbility" placeholder="能力、资源与使用代价"></textarea><textarea class="field" id="syncCharacterArc" placeholder="人物成长弧"></textarea><button class="btn" type="submit">确认同步人物库</button><div class="error" id="syncCharacterError"></div></form></div>`);
+let syncingAssetId=null;
+function numberedSection(text,n){const re=new RegExp(`(?:^|\\n)#{1,6}\\s*${n}\\.\\s*[^\\n]*\\n([\\s\\S]*?)(?=\\n#{1,6}\\s*${n+1}\\.|$)`);return (text||'').match(re)?.[1]?.trim()||''}
+function cleanMd(v){return (v||'').replace(/\*\*/g,'').replace(/^[-*>\s]+/gm,'').trim()}
+window.syncAssetCharacter=id=>{
+  const a=assets.find(x=>x.id===id);if(!a)return;
+  if(a.asset_type!=='人物卡'){alert('只有“人物卡”资产可以同步到人物库。');return}
+  syncingAssetId=id;const c=a.content||'';
+  $('syncCharacterName').value=cleanMd(numberedSection(c,1)).match(/(?:本名|姓名)[：:]?\s*([^（\n]+)/)?.[1]?.trim()||a.title;
+  $('syncCharacterRole').value=cleanMd(numberedSection(c,2)).slice(0,500);
+  $('syncCharacterTags').value=(a.tags||[]).join(',');
+  $('syncCharacterDesire').value=[numberedSection(c,3),numberedSection(c,5)].filter(Boolean).join('\n\n');
+  $('syncCharacterFear').value=[numberedSection(c,6),numberedSection(c,7)].filter(Boolean).join('\n\n');
+  $('syncCharacterAbility').value=[numberedSection(c,8),numberedSection(c,9)].filter(Boolean).join('\n\n');
+  $('syncCharacterArc').value=numberedSection(c,20);
+  $('syncCharacterError').textContent='';$('syncCharacterModal').classList.add('open');
+};
+$('syncCharacterClose').onclick=()=>$('syncCharacterModal').classList.remove('open');
+$('syncCharacterForm').onsubmit=async e=>{e.preventDefault();const payload={name:$('syncCharacterName').value.trim(),role:$('syncCharacterRole').value.trim(),tags:$('syncCharacterTags').value.split(/[,，]/).map(x=>x.trim()).filter(Boolean),desire:$('syncCharacterDesire').value.trim(),fear:$('syncCharacterFear').value.trim(),ability:$('syncCharacterAbility').value.trim(),arc:$('syncCharacterArc').value.trim(),source_asset_id:syncingAssetId};const existing=characters.find(x=>x.source_asset_id===syncingAssetId);const result=existing?await db.from('characters').update(payload).eq('id',existing.id):await db.from('characters').insert(payload);if(result.error){$('syncCharacterError').textContent=result.error.message;return}$('syncCharacterModal').classList.remove('open');alert(existing?'人物库中的对应人物已更新。':'人物已同步到人物库。');loadAll()};
+
+const v15RenderAssets=renderAssets;
+renderAssets=function(){v15RenderAssets();assets.filter(a=>a.asset_type==='人物卡').forEach(a=>{const edit=document.querySelector(`#assetList button[onclick="editAsset('${a.id}')"]`);if(!edit)return;const actions=edit.parentElement;if(actions.querySelector('.sync-character'))return;const b=document.createElement('button');b.className='sync-character';b.textContent=characters.some(c=>c.source_asset_id===a.id)?'更新人物库':'同步人物库';b.onclick=e=>{e.stopPropagation();syncAssetCharacter(a.id)};actions.insertBefore(b,edit)});bindOverviewInteractions()};
+
+const v15RenderPipelines=renderPipelines;
+renderPipelines=function(){v15RenderPipelines();pipelines.forEach(task=>{if(task.status!=='待审核'||!task.output_draft?.trim())return;const edit=document.querySelector(`#pipelineList button[onclick="editPipeline('${task.id}')"]`);if(!edit)return;const actions=edit.parentElement;if(actions.querySelector('.revise-run'))return;const b=document.createElement('button');b.className='revise-run';b.textContent='按审核意见重做';b.onclick=e=>{e.stopPropagation();revisePipelineAI(task.id)};actions.insertBefore(b,edit)});bindOverviewInteractions()};
