@@ -315,3 +315,32 @@ renderAssets=function(){v15RenderAssets();assets.filter(a=>a.asset_type==='人�
 
 const v15RenderPipelines=renderPipelines;
 renderPipelines=function(){v15RenderPipelines();pipelines.forEach(task=>{if(task.status!=='待审核'||!task.output_draft?.trim())return;const edit=document.querySelector(`#pipelineList button[onclick="editPipeline('${task.id}')"]`);if(!edit)return;const actions=edit.parentElement;if(actions.querySelector('.revise-run'))return;const b=document.createElement('button');b.className='revise-run';b.textContent='按审核意见重做';b.onclick=e=>{e.stopPropagation();revisePipelineAI(task.id)};actions.insertBefore(b,edit)});bindOverviewInteractions()};
+
+// v16：两段式样本拆解，自动关联结构分析与模块提炼，并检测输出是否完整。
+document.head.insertAdjacentHTML('beforeend',`<style>
+.quality-ok{color:#34d399;font-size:12px;margin-top:8px}.quality-warn{color:#fbbf24;font-size:12px;margin-top:8px}.derive-modules{background:#0e7490!important;color:#fff!important;font-weight:700}
+</style>`);
+if(!$('pipelineType').querySelector('option[value="模块提炼与入库"]'))$('pipelineType').insertAdjacentHTML('beforeend','<option>模块提炼与入库</option>');
+pipelineSteps['模块提炼与入库']=['读取结构分析结论','筛选高价值候选','抽象可复用机制','生成标准模块卡','原创隔离检查','人工确认入库'];
+
+const v16PipelineMarkup=pipelineMarkup;
+pipelineMarkup=function(){return v16PipelineMarkup().replace('<button class="chip">创作引擎组装</button>','<button class="chip">创作引擎组装</button><button class="chip">模块提炼与入库</button>')};
+
+const v16ApprovePipeline=approvePipeline;
+window.approvePipeline=async id=>{
+  const task=pipelines.find(x=>x.id===id);
+  if(['作品样本拆解','模块提炼与入库','创作引擎组装'].includes(task?.pipeline_type)&&!task?.output_complete){alert('自动质检未检测到完整结束标记，结果可能被截断，暂时不能审核通过。请重新执行或检查输出。');return}
+  return v16ApprovePipeline(id);
+};
+
+window.createModuleExtraction=async sourceId=>{
+  const source=pipelines.find(x=>x.id===sourceId);if(!source)return;
+  if(source.status!=='已完成'){alert('请先审核通过结构分析任务。');return}
+  if(!source.output_complete){alert('结构分析结果未通过完整性检查，不能进入模块提炼。');return}
+  if(pipelines.some(x=>x.source_pipeline_id===sourceId&&x.pipeline_type==='模块提炼与入库')){alert('这个结构分析已经建立了模块提炼任务，请在任务列表中查看。');return}
+  const payload={name:`模块提炼｜${source.name}`,pipeline_type:'模块提炼与入库',project_id:source.project_id||null,sop_id:source.sop_id||null,source_pipeline_id:sourceId,input_brief:'依据关联的结构分析结果，提炼3—6个可复用模块。不得复述或保存大段原文，不得复制来源作品的受保护表达。',output_draft:'',review_notes:'',status:'待执行',steps:makeSteps('模块提炼与入库'),output_complete:false,quality_report:{}};
+  const {error}=await db.from('pipeline_runs').insert(payload);if(error){alert('创建失败：'+error.message);return}alert('模块提炼任务已创建。请找到新任务并点击“AI 自动执行”。');loadAll();
+};
+
+const v16RenderPipelines=renderPipelines;
+renderPipelines=function(){v16RenderPipelines();pipelines.forEach(task=>{const edit=document.querySelector(`#pipelineList button[onclick="editPipeline('${task.id}')"]`);if(!edit)return;const card=edit.closest('.run-card'),actions=edit.parentElement;if(task.output_draft?.trim()){const q=document.createElement('div');q.className=task.output_complete?'quality-ok':'quality-warn';q.textContent=task.output_complete?'✓ 自动完整性检查通过':'⚠ 未检测到完整结束标记，结果可能被截断';card.appendChild(q)}if(task.pipeline_type==='作品样本拆解'&&task.status==='已完成'&&!actions.querySelector('.derive-modules')){const b=document.createElement('button');b.className='derive-modules';b.textContent='生成模块提炼任务';b.onclick=e=>{e.stopPropagation();createModuleExtraction(task.id)};actions.insertBefore(b,edit)}});bindOverviewInteractions()};
