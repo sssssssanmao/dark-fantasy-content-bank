@@ -1,4 +1,12 @@
 // v18：章节正文、版本管理与连续章节批量入库。
+if(!window.ChapterTools){
+  window.ChapterTools={
+    extractChapterNo(...values){for(const value of values){const m=String(value||'').match(/第\s*(\d+)\s*章/);if(m)return Number(m[1])}return null},
+    parseChapterBlocks(text){const s=String(text||'').replace(/\r\n?/g,'\n'),re=/^(?:#{1,6}\s*)?第\s*(\d+)\s*章(?:\s*[｜|：:\-—]\s*|\s+)?([^\n]*)$/gm,h=[...s.matchAll(re)];return h.map((m,i)=>({chapter_no:Number(m[1]),title:m[2].trim()||`第${m[1]}章`,body:s.slice(m.index+m[0].length,i+1<h.length?h[i+1].index:s.length).replace(/\n*\[\[REPORT_COMPLETE\]\][\s\S]*$/,'').trim()})).filter(x=>x.body)},
+    nextVersion(rows,projectId,chapterNo){return Math.max(0,...(rows||[]).filter(x=>x.project_id===projectId&&Number(x.chapter_no)===Number(chapterNo)).map(x=>Number(x.version_no)||0))+1},
+    validateBatch(blocks){const errors=[],seen=new Set();for(const b of blocks){if(seen.has(b.chapter_no))errors.push(`第${b.chapter_no}章重复`);seen.add(b.chapter_no);if(!b.body.trim())errors.push(`第${b.chapter_no}章正文为空`)}const n=[...seen].sort((a,b)=>a-b);for(let i=1;i<n.length;i++)if(n[i]!==n[i-1]+1)errors.push(`第${n[i-1]}章与第${n[i]}章之间不连续`);return{ok:!errors.length,errors,chapter_nos:n}}
+  };
+}
 let chapterContents=[],chapterContentsAvailable=true,chapterContentEditing=null;
 document.head.insertAdjacentHTML('beforeend',`<style>
 .chapter-content-card{padding:14px 0;border-top:1px solid #242735}.chapter-content-card h3{margin:4px 0}.chapter-content-meta{color:#a78bfa;font-size:12px}.chapter-preview{white-space:pre-wrap;max-height:110px;overflow:hidden;color:var(--muted);font-size:12px}.setup-warn{padding:12px;border:1px solid #92400e;border-radius:8px;background:#451a031f;color:#fbbf24}.batch-note{padding:10px;border-radius:8px;background:#111827;color:#c4b5fd;font-size:12px;margin:8px 0}.quick-six{margin:0 0 8px;background:#0e7490!important}
