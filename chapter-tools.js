@@ -2,7 +2,8 @@
   const api=factory();
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.ChapterTools=api;
-})(typeof globalThis!=='undefined'?globalThis:this,function(){
+  if(typeof window!=='undefined')window.ChapterTools=api;
+})(typeof window!=='undefined'?window:(typeof globalThis!=='undefined'?globalThis:this),function(){
   const cnDigits={'零':0,'〇':0,'一':1,'二':2,'两':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
   function chineseNumber(raw){
     const s=String(raw||'').trim();
