@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict');
+const T=require('../continuation-tools');
+assert.deepEqual(T.rangeFromText('生成第2—6章正文'),[2,3,4,5,6]);
+assert.deepEqual(T.rangeFromText('第1-3章'),[1,2,3]);
+const partial='# 第2章｜钟楼\n\n正文二\n\n# 第3章｜追兵\n\n我只知道，那天';
+assert.equal(T.nextTarget(partial,[2,3,4,5,6],false),3);
+let blocks=T.merge(partial,'# 第3章｜追兵\n\n完整正文三\n\n[[REPORT_COMPLETE]]');
+assert.equal(blocks.find(x=>x.chapter_no===3).body,'完整正文三');
+blocks=T.merge(T.compose(blocks,[2,3,4,5,6],false),'# 第4章｜旧街\n\n正文四\n# 第5章｜黑信\n\n正文五\n# 第6章｜天亮\n\n正文六\n\n## 2—6章连续性质检\n通过\n\n[[REPORT_COMPLETE]]');
+const final=T.compose(blocks,[2,3,4,5,6],true);
+assert.equal(T.complete(final,[2,3,4,5,6]),true);
+assert.match(final,/\[\[REPORT_COMPLETE\]\]$/);
+assert.match(final,/连续性质检/);
+console.log('continuation-tools tests passed');
