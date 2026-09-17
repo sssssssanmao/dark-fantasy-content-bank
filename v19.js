@@ -7,6 +7,9 @@
     if(!box){box=document.createElement('div');box.id='v19Notice';box.style.cssText='position:fixed;right:20px;bottom:20px;z-index:99999;max-width:420px;padding:14px 16px;border-radius:10px;color:#fff;box-shadow:0 12px 32px #0008;font-size:13px;line-height:1.55';document.body.appendChild(box)}
     box.style.background=kind==='error'?'#991b1b':'#115e59';box.textContent=message;box.hidden=false;clearTimeout(box._timer);box._timer=setTimeout(()=>{box.hidden=true},8000);
   }
+  // 统一替代原生 alert，避免提示框阻塞长任务、远程控制与后台检查。
+  window.showAppNotice=notice;
+  window.alert=message=>notice(String(message),/失败|错误|不能|未/.test(String(message))?'error':'info');
   async function freshTask(id){const {data,error}=await db.from('pipeline_runs').select('*').eq('id',id).single();if(error)throw error;return data}
   function storyRange(task){if(task?.pipeline_type!=='故事开发')return null;const range=T.rangeFromText(task.input_brief,task.name);return range&&range.length>1?range:null}
   function instruction(no,isLast,range){return `自动续写修复：只输出第${no}章完整正文，不要重写其他章节。\n必须以“# 第${no}章｜章节标题”单独起行；从完整场景开头写到完整章尾，不得在句中截断，不得用梗概代替。\n${isLast?`本章正文后补充“## ${range[0]}—${range.at(-1)}章连续性质检”，检查人物、规则、时间线、伏笔、道具和章间衔接。\n`:''}全文最后单独一行输出 [[REPORT_COMPLETE]]。`}
