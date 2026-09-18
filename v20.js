@@ -5,10 +5,9 @@
   const esc=v=>safe(v||'');
   const splitTags=v=>String(v||'').split(/[,，]/).map(x=>x.trim()).filter(Boolean);
 
-  if(!$('pipelineType').querySelector('option[value="潜力IP日报归纳"]')){
-    $('pipelineType').insertAdjacentHTML('beforeend','<option>潜力IP日报归纳</option>');
-  }
-  pipelineSteps['潜力IP日报归纳']=['读取日报与证据等级','标准化榜单作品记录','归纳题材与人设关系','识别趋势与异常','提炼可复用创作模块','人工审核入库'];
+  // 复用数据库已允许的“市场风向扫描”类型，避免要求用户额外执行 SQL 迁移。
+  const unsupportedIpOption=$('pipelineType').querySelector('option[value="潜力IP日报归纳"]');
+  if(unsupportedIpOption)unsupportedIpOption.remove();
   ['市场研究','长篇创作'].forEach(category=>{
     if(!$('templateCategory').querySelector(`option[value="${category}"]`))$('templateCategory').insertAdjacentHTML('beforeend',`<option>${category}</option>`);
   });
@@ -52,7 +51,7 @@
   pipelineMarkup=function(){
     return previousPipelineMarkup()
       .replace('<div class="pipeline-help">',`<div class="quick-workflows"><div class="quick-workflow"><span class="eyebrow">MARKET INTELLIGENCE</span><h3>潜力 IP 日报归纳</h3><p>粘贴日报，自动归纳榜单、趋势、人物关系、风险与可复用模块。</p><button class="btn" id="quickIpDaily">开始归纳日报</button></div><div class="quick-workflow"><span class="eyebrow">NOVEL ENGINE</span><h3>灵感扩写成书</h3><p>从几句灵感建立项目，按6章一批生成正文并持续质检。</p><button class="btn" id="quickNovel">开始扩写小说</button></div></div><div class="pipeline-help">`)
-      .replace('<button class="chip">市场风向扫描</button>','<button class="chip">市场风向扫描</button><button class="chip">潜力IP日报归纳</button>');
+      ;
   };
 
   function bindQuickWorkflows(){
@@ -69,7 +68,7 @@
     e.preventDefault();$('ipDailyError').textContent='';
     const date=$('ipDailyDate').value,text=$('ipDailyText').value.trim(),tags=splitTags($('ipDailyTags').value),sop=findSop(IP_SOP);
     const input=`报告日期：${date}\n标签：${tags.join('、')}\n\n【原始日报】\n${text}\n\n【强制规范】\n1. 保留平台、榜单、名次、作品、作者、原生指标、采集日期与证据等级。\n2. 明确标注 L0榜单级、L1简介级、L2目录/试读级、L3正文级；推断必须写“推测”。\n3. 热度不得等同于在读人数；不可核验时写“暂无公开数据”，不得构造排名。\n4. 仅在存在同口径历史快照时比较趋势；历史不足不得声称周趋势。\n5. 输出标准化作品表、趋势与异常、潜力候选、内容风险、改编成本、可复用人物/关系/情节模块。\n6. 全文最后单独输出 [[REPORT_COMPLETE]]。`;
-    const payload={name:`潜力IP日报归纳｜${date}`,pipeline_type:'潜力IP日报归纳',project_id:null,sop_id:sop?.id||null,input_brief:input,output_draft:'',review_notes:'',status:'待执行',steps:makeSteps('潜力IP日报归纳'),output_complete:false,quality_report:{source_date:date,tags}};
+    const payload={name:`潜力IP日报归纳｜${date}`,pipeline_type:'市场风向扫描',project_id:null,sop_id:sop?.id||null,input_brief:input,output_draft:'',review_notes:'',status:'待执行',steps:makeSteps('市场风向扫描'),output_complete:false,quality_report:{workflow:'potential_ip_daily',source_date:date,tags}};
     const {error}=await db.from('pipeline_runs').insert(payload);if(error){$('ipDailyError').textContent=error.message;return}$('ipDailyModal').classList.remove('open');showAppNotice('日报归纳任务已建立，请点击“AI 自动执行”。');loadAll();
   };
 
