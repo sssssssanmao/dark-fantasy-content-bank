@@ -96,4 +96,20 @@
       const edit=document.querySelector(`#pipelineList button[onclick="editPipeline('${task.id}')"]`);if(!edit)return;const actions=edit.parentElement;if(actions.querySelector('.next-batch'))return;const range=rangeOf(task),total=Number(task.quality_report?.total_chapters)||0;if(total&&range[1]>=total)return;const b=document.createElement('button');b.className='next-batch';b.textContent='继续下一批';b.onclick=e=>{e.stopPropagation();createNextNovelBatch(task.id)};actions.insertBefore(b,edit);
     });
   }
+
+  // 人工修订后重新计算完整性：模型偶尔会漏掉结束标记，补标保存后应清除旧截断告警。
+  const basePipelineSubmit=$('pipelineForm').onsubmit;
+  $('pipelineForm').onsubmit=async function(e){
+    const editingId=pipelineEditing;
+    const complete=$('pipelineOutput').value.includes('[[REPORT_COMPLETE]]');
+    await basePipelineSubmit.call(this,e);
+    if(editingId){
+      const {error}=await db.from('pipeline_runs').update({
+        output_complete:complete,
+        last_error:complete?'':'输出可能被截断：未检测到完整结束标记'
+      }).eq('id',editingId);
+      if(error)showAppNotice('完整性状态更新失败：'+error.message,'error');
+      else await loadAll();
+    }
+  };
 })();
